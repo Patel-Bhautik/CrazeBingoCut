@@ -142,7 +142,7 @@ are sent to GitHub; set `CBC_UPDATE_CHECK=0` to turn the check off.
 
 ## Deploy
 
-[DEPLOY.md](DEPLOY.md) walks through a single server with Docker: the app, PostgreSQL, and Caddy for HTTPS.
+[DEPLOY.md](DEPLOY.md) walks through a single server with Docker (the app, PostgreSQL, and Caddy for HTTPS), and Render with `render.yaml`.
 
 ```bash
 docker compose up -d --build

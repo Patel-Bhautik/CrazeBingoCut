@@ -127,7 +127,9 @@ YT_TRANSCRIPT = env("CBC_YT_TRANSCRIPT", "1") != "0"
 # the compact model for processors; a machine with a graphics card sets CBC_ASR_MODEL to the full-precision one
 ASR_MODEL_NAME = env("CBC_ASR_MODEL", "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8")
 ASR_MODEL_DIR = MODELS_DIR / ASR_MODEL_NAME
-DATABASE_URL = env("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'crazebingocut.db').as_posix()}"
+# hosts such as Render hand out postgres:// or postgresql:// addresses; the driver installed here is psycopg (version 3)
+DATABASE_URL = (re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", env("DATABASE_URL") or "")
+                or f"sqlite:///{(DATA_DIR / 'crazebingocut.db').as_posix()}")
 
 for d in (USERS_DIR, MODELS_DIR, TMP_DIR, FONTS_DIR):
     d.mkdir(parents=True, exist_ok=True)

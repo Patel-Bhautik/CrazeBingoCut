@@ -74,6 +74,32 @@ Without SMTP on an HTTPS site, no reset emails can be sent.
 - **Open sign-up**: anyone who can reach the site can make an account and use your AI key. On a public address,
   keep the limits in `.env` sensible, or put the site behind your own access control.
 
+## Render
+
+`render.yaml` sets CrazeBingoCut up on [Render](https://render.com) at `https://crazebingocut.onrender.com`, on the
+free plan, with a free PostgreSQL database for accounts.
+
+1. Push this repository to GitHub.
+2. In the Render dashboard: **New**, **Blueprint**, connect GitHub and pick the repository. Render reads `render.yaml`.
+3. When asked, paste your AI key into `CBC_AI_KEY`. Press **Apply**. The first build takes several minutes.
+4. Open the site and sign up.
+5. To make yourself an admin (the free plan has no shell): in Render, open the database, copy its
+   **External Database URL**, and run this on your own computer, inside this folder:
+   `DATABASE_URL="<that address>" python -m studio.admin grant you@example.com`
+
+What the free plan can and cannot do:
+
+- **It cannot make clips.** It has 512 MB of memory, and the speech model needs about 1 GB. The site, sign-up,
+  settings and creators work; making a clip runs out of memory.
+- **Nothing on disk is kept.** Uploads, clips, and AI settings saved in the dashboard are lost on every restart and
+  deploy. That is why the AI key is set in Render's environment instead. Accounts are kept, in the database.
+- **It sleeps** after 15 minutes without visitors; the next visit takes about a minute to wake it.
+- **The free database is deleted after 30 days** unless you upgrade it.
+
+For real use, change `plan: free` to `plan: standard` (2 GB memory) in `render.yaml`, add a disk mounted at `/data`
+(`disk:` with `mountPath: /data` and `sizeGB: 20`), and remove `CBC_FETCH_MODEL`, so the speech model is downloaded
+once and kept. The service then also has a shell for `python -m studio.admin grant`.
+
 ## A server that already runs other sites
 
 Leave `COMPOSE_PROFILES=own-https` out of `.env`. CrazeBingoCut then listens only on `127.0.0.1:8765` and the web

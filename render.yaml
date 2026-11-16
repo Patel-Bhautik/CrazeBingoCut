@@ -1,0 +1,60 @@
+# CrazeBingoCut on Render's free plan (a demo): Render dashboard > New > Blueprint > pick this repository.
+# Free plan limits: 512 MB of memory (too little to make clips: the speech model alone needs about 1 GB), no
+# permanent disk (videos, clips and the AI settings saved in the dashboard are lost on every restart), and the site
+# sleeps after 15 minutes without visitors. Accounts are kept in the free PostgreSQL database below, which Render
+# deletes after 30 days unless it is upgraded. For real use, see "Render" in DEPLOY.md.
+services:
+  - type: web
+    name: crazebingocut                # the address becomes https://crazebingocut.onrender.com
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: true                   # every push to main goes live
+    envVars:
+      - key: PORT                      # the port Render sends visitors to; the image listens on 8765
+        value: "8765"
+      - key: CBC_PUBLIC_URL
+        value: https://crazebingocut.onrender.com
+      - key: CBC_ACCOUNTS              # a public site: everyone signs in (off would make every visitor the owner)
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crazebingocut-db
+          property: connectionString
+      # the AI: the key is typed into the Render dashboard when the Blueprint is created, never written here
+      - key: CBC_AI_PROVIDER
+        value: gemini
+      - key: CBC_AI_MODELS
+        value: gemini-3.1-flash-lite
+      - key: CBC_AI_KEY
+        sync: false
+      # sized for one small free instance
+      - key: CBC_FETCH_MODEL           # don't download the 480 MB speech model at every start
+        value: "0"
+      - key: CBC_JOB_WORKERS
+        value: "1"
+      - key: CBC_MAX_LIVE
+        value: "1"
+      - key: CBC_ASR_COPIES
+        value: "1"
+      - key: CBC_ASR_THREADS
+        value: "1"
+      - key: CBC_REQUEST_THREADS
+        value: "16"
+      - key: CBC_MIN_FREE_DISK_GB
+        value: "1"
+      - key: CBC_UPDATE_CHECK          # the image has no git history to compare against
+        value: "0"
+      # open sign-up uses your AI key: keep each person small
+      - key: CBC_MAX_JOBS_PER_USER
+        value: "1"
+      - key: CBC_MAX_VIDEO_HOURS
+        value: "1"
+      - key: CBC_MAX_UPLOAD_MB
+        value: "500"
+
+databases:
+  - name: crazebingocut-db
+    plan: free
+    databaseName: crazebingocut
+    user: crazebingocut
