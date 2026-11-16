@@ -87,6 +87,10 @@ free plan, with a free PostgreSQL database for accounts.
    **External Database URL**, and run this on your own computer, inside this folder:
    `DATABASE_URL="<that address>" python -m studio.admin grant you@example.com`
 
+Made the service with **New, Web Service** instead? Then `render.yaml` is not read. On Render, sign-in is on and
+the site's own address is used anyway, but there is no database (accounts vanish on every restart) and no AI key:
+add `DATABASE_URL` (from a Render PostgreSQL database) and the `CBC_AI_*` lines under the service's **Environment**.
+
 What the free plan can and cannot do:
 
 - **It cannot make clips.** It has 512 MB of memory, and the speech model needs about 1 GB. The site, sign-up,

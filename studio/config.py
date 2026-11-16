@@ -144,13 +144,14 @@ def user_dir(uid: str) -> Path:
 # ---------------------------------------------------------------- the site
 HOST = env("CBC_HOST", "127.0.0.1")
 PORT = int(env("CBC_PORT") or "8765")
-PUBLIC_URL = (env("CBC_PUBLIC_URL") or f"http://127.0.0.1:{PORT}").rstrip("/")   # e.g. https://crazebingocut.com
+# On Render, the service's own address (RENDER_EXTERNAL_URL) is used when CBC_PUBLIC_URL is not set.
+PUBLIC_URL = (env("CBC_PUBLIC_URL") or env("RENDER_EXTERNAL_URL") or f"http://127.0.0.1:{PORT}").rstrip("/")   # e.g. https://crazebingocut.com
 HTTPS = PUBLIC_URL.startswith("https://")
 SESSION_DAYS = int(env("CBC_SESSION_DAYS", "30"))
 # Accounts are off by default: CrazeBingoCut opens straight into the dashboard, with no sign-in, which is what you want
 # on your own computer. On a server that other people can reach, set CBC_ACCOUNTS=1: everyone then signs up
-# and signs in, and each person only sees their own videos.
-ACCOUNTS = env("CBC_ACCOUNTS", "0") == "1"
+# and signs in, and each person only sees their own videos. On Render (a public site) they are on unless turned off.
+ACCOUNTS = env("CBC_ACCOUNTS", "1" if env("RENDER") else "0") == "1"
 # The two buttons along the top of the dashboard: the project's code, and where to follow its maker (feedback goes
 # there too). Set either to an empty value to hide that button, or point them at your own pages in a fork.
 REPO_URL = env("CBC_REPO_URL", "https://github.com/Patel-Bhautik/CrazeBingoCut").strip()
