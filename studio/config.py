@@ -12,6 +12,13 @@ def _load_dotenv():
     f = ROOT / ".env"
     if not f.exists():
         return
+    try:
+        from dotenv import load_dotenv
+    except ImportError:          # python-dotenv not installed yet: read the file the simple way below
+        load_dotenv = None
+    if load_dotenv:
+        load_dotenv(f, override=False)   # settings already in the environment win over .env, as before
+        return
     for line in f.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
@@ -234,6 +241,27 @@ def _read_google_client() -> tuple:
         except ValueError:
             pass
     return "", ""
+
+
+# YouTube from your own computer: a "Desktop app" OAuth client from Google Cloud, saved as this file. Signing in is
+# done once with `python -m studio.youtube connect`, which opens the browser. The file is never sent anywhere.
+YT_CLIENT_FILE = Path(env("CBC_YT_CLIENT_FILE") or ROOT / "secrets" / "youtube_client.json")
+# The most YouTube uploads per day from this machine, all channels together. YouTube's standard allowance
+# (10,000 units a day, 1,600 per upload) is about 6. Posts over the limit wait until the next morning.
+YT_DAILY_LIMIT = max(1, int(env("CBC_YT_DAILY_LIMIT") or "6"))
+
+
+def youtube_desktop_client() -> tuple:
+    """(client id, client secret) of the Desktop app client in YT_CLIENT_FILE, or ("", "")."""
+    return _keep("youtube_desktop", _read_youtube_desktop)
+
+
+def _read_youtube_desktop() -> tuple:
+    try:
+        got = json.loads(YT_CLIENT_FILE.read_text(encoding="utf-8")).get("installed") or {}
+        return got.get("client_id", ""), got.get("client_secret", "")
+    except (OSError, ValueError, AttributeError):
+        return "", ""
 
 
 # ---------------------------------------------------------------- video

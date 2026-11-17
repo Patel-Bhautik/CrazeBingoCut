@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-local-")
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-local-")
 os.environ.update(DATABASE_URL="", CBC_ACCOUNTS="0", CBC_AI_PROVIDER="gemini", CBC_AI_MODELS="", CBC_AI_KEY="",
                   CBC_AI_KEY_FILE="", CBC_AI_BASE_URL="", CBC_PUBLIC_URL="http://127.0.0.1:8765")
 sys.path.insert(0, ".")
@@ -28,7 +28,7 @@ def check(name, got, want=True):
 
 # ---- no sign-in anywhere
 check("the dashboard opens with no sign-in", c.get("/app").status_code, 200)
-check("the front page goes straight to the dashboard", (c.get("/").status_code, c.get("/").headers.get("location")), (303, "/app"))
+check("the home page opens too, with no sign-in", (c.get("/").status_code, "Open CrazeBingoCut" in c.get("/").text or "data-auth" in c.get("/").text), (200, True))
 check("the sign-in page goes to the dashboard", (c.get("/login").status_code, c.get("/signup").status_code, c.get("/reset").status_code), (303, 303, 303))
 st = c.get("/api/status").json()
 check("the page is told there are no accounts", st["accounts"], False)

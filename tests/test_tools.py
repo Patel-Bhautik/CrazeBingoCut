@@ -2,7 +2,7 @@
 and an AI model name the service does not know. Runs against the code directly; nothing is downloaded."""
 import io, os, shutil, sys, tarfile, tempfile
 from pathlib import Path
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-tools-"); os.environ["DATABASE_URL"] = ""
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-tools-"); os.environ["DATABASE_URL"] = ""
 os.environ.pop("CBC_MODELS", None)          # this test makes and removes a model: only ever inside its own folder
 os.environ.update(CBC_AI_PROVIDER="gemini", CBC_AI_MODELS="gemini-old", CBC_AI_KEY="test-key-123456")
 sys.path.insert(0, ".")
@@ -15,10 +15,10 @@ def check(n, got, want=True):
 # ---- ffmpeg
 real_path = os.environ.get("PATH", "")
 exe = ".exe" if sys.platform == "win32" else ""
-hidden = tempfile.mkdtemp(prefix="pc-ff-")
+hidden = tempfile.mkdtemp(prefix="cbc-ff-")
 for name in tools.NEEDED:
     f = Path(hidden) / (name + exe); f.write_bytes(b"x"); f.chmod(0o755)
-os.environ["PATH"] = tempfile.mkdtemp(prefix="pc-empty-")            # a PATH with no ffmpeg on it
+os.environ["PATH"] = tempfile.mkdtemp(prefix="cbc-empty-")            # a PATH with no ffmpeg on it
 real_places = tools._places
 tools._places = lambda: []
 check("with ffmpeg nowhere, both programs are reported missing", tools.setup(), ["ffmpeg", "ffprobe"])
@@ -41,7 +41,7 @@ check("no model to begin with", fetch_model.ready(), False)
 d.mkdir(parents=True); (d / "tokens.txt").write_text("a 1")
 check("half a model (a download that was cut off) does not count", fetch_model.ready(), False)
 def fake_download(url, dest, hook=None):
-    buf = tempfile.mkdtemp(prefix="pc-tar-")
+    buf = tempfile.mkdtemp(prefix="cbc-tar-")
     src = Path(buf) / config.ASR_MODEL_NAME; src.mkdir()
     for n in ("tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx"):
         (src / n).write_bytes(b"model")

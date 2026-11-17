@@ -5,29 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in to CrazeBingoCut</title>
 <meta name="description" content="Sign in or create your CrazeBingoCut account.">
-<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg?v=4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--brand:#7C3AED;--brand-hi:#8B5CF6;--ink:#1E1640;--soft:#F3EEFF;--line-b:#DDD0FF;--deep:#5B21B6;
-  --frame:#15122B;--frame-2:#221D3F;--frame-text:#EEEBFA;--frame-dim:#9C96B8;
-  --muted:#F6F5FA;--line:#ECEAF3;--line-2:#DCD8E8;--text:#17142A;--dim:#625C7A;--faint:#9A95AE;--bad:#D3343F;--bad-soft:#FDECEE;
-  --r-lg:16px;--r:12px;--r-sm:8px;color-scheme:light}
+:root{--brand:#FF5A1F;--brand-hi:#FF7A45;--ink:#FBF8F4;--soft:rgba(255,90,31,.12);--line-b:rgba(255,90,31,.38);--deep:#FF7A45;--on-brand:#0F0E0D;
+  --frame:#0F0E0D;--frame-2:#191715;--frame-text:#F5F2EE;--frame-dim:#A39E97;--panel:#191715;--card:#1E1B18;--hover:#2E2A25;
+  --muted:#25221E;--line:#2B2723;--line-2:#36312B;--text:#F5F2EE;--dim:#A39E97;--faint:#6E675F;--bad:#F87171;--bad-soft:rgba(248,113,113,.12);
+  --good:#4ADE80;--good-soft:rgba(74,222,128,.12);
+  --r-lg:16px;--r:12px;--r-sm:8px;color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{scroll-behavior:smooth}
-body{margin:0;background:#fff;color:var(--text);font:16px/1.55 "Geist","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--frame);color:var(--text);font:16px/1.55 "Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 h1,h2,h3,p{margin:0}
 a{color:inherit}
 svg{width:18px;height:18px;flex:none;fill:currentColor}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:var(--r);border:1px solid var(--line-2);background:#fff;color:var(--text);
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--card);color:var(--text);
   font:inherit;font-weight:600;font-size:15px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
-.btn:hover{background:var(--muted);border-color:#C8C3D4}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn:hover{background:var(--hover);border-color:#433D36}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
 .btn.primary:hover{background:var(--brand-hi);border-color:var(--brand-hi)}
-.btn.dark{background:var(--ink);border-color:var(--ink);color:#fff}.btn.dark:hover{background:#2B253A;border-color:#2B253A}
+.btn.dark{background:var(--muted);border-color:var(--muted);color:var(--text)}.btn.dark:hover{background:var(--hover);border-color:var(--hover)}
 .btn.sm{height:38px;padding:0 14px;font-size:14px}
 .btn.lg{height:52px;padding:0 26px;font-size:16px}
 .btn:disabled{opacity:.5;cursor:default}
@@ -36,19 +37,19 @@ svg{width:18px;height:18px;flex:none;fill:currentColor}
 body{min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);background:var(--frame)}
 .side{color:var(--frame-text);padding:40px 48px;display:flex;flex-direction:column;justify-content:space-between;min-height:100vh}
 .side img{height:38px}
-.side h1{font-size:clamp(30px,3.2vw,42px);line-height:1.1;letter-spacing:-.03em;font-weight:700;color:#fff;max-width:440px}
+.side h1{font-size:clamp(30px,3.2vw,42px);line-height:1.1;letter-spacing:-.03em;font-weight:700;color:var(--ink);max-width:440px}
 .side h1 em{font-style:normal;color:var(--brand)}
 .side ul{list-style:none;padding:0;margin:28px 0 0;display:flex;flex-direction:column;gap:14px;color:var(--frame-dim);font-size:16px}
 .side li{display:flex;gap:12px;align-items:flex-start}.side li svg{color:var(--brand);margin-top:3px}
 .side small{color:var(--frame-dim);font-size:13px}
-.main{background:#fff;margin:8px 8px 8px 0;border-radius:var(--r-lg);display:grid;place-items:center;padding:32px 20px}
+.main{background:var(--panel);margin:8px 8px 8px 0;border-radius:var(--r-lg);display:grid;place-items:center;padding:32px 20px}
 .card{width:100%;max-width:400px}
 .card h2{font-size:28px;font-weight:700;letter-spacing:-.03em;color:var(--ink)}
 .card>p{color:var(--dim);margin:8px 0 26px}
 form{display:flex;flex-direction:column;gap:16px}
 label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600;color:var(--dim)}
-input{height:46px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:#fff;font:inherit;color:var(--text);outline:none;transition:border-color .15s ease,background-color .15s ease}
-input:hover{border-color:#C8C3D4}input:focus{border-color:var(--brand);background:#fff}
+input{height:46px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--card);font:inherit;color:var(--text);outline:none;transition:border-color .15s ease,background-color .15s ease}
+input:hover{border-color:#433D36}input:focus{border-color:var(--brand);background:var(--card)}
 input:focus-visible{outline:none}
 input::placeholder{color:var(--faint)}
 .btn{width:100%;height:48px}
@@ -63,7 +64,7 @@ input::placeholder{color:var(--faint)}
 .pwbox{position:relative;display:block}
 .pwbox input{width:100%;padding-right:48px}
 .pwbox button{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:var(--faint);display:grid;place-items:center;cursor:pointer;transition:color .15s ease,background-color .15s ease}
-.pwbox button:hover{color:var(--text);background:var(--muted, #F6F5FA)}
+.pwbox button:hover{color:var(--text);background:var(--hover)}
 .pwbox button svg{width:18px;height:18px;fill:currentColor}
 .pwbox button[aria-pressed=true]{color:var(--deep)}
 .pwrow a{font-size:13px;font-weight:600;color:var(--deep);text-decoration:none}.pwrow a:hover{text-decoration:underline}
@@ -71,12 +72,12 @@ input::placeholder{color:var(--faint)}
 .legal a{color:var(--dim)}
 .g{width:20px;height:20px}
 .mobile-logo{display:none}
-@media (max-width:860px){body{grid-template-columns:1fr;background:#fff}.side{display:none}.main{margin:0;border-radius:0;min-height:100vh;align-content:center}.mobile-logo{display:block;height:34px;margin-bottom:28px}}
+@media (max-width:860px){body{grid-template-columns:1fr;background:var(--panel)}.side{order:2;min-height:0;padding:0 20px 24px;background:var(--panel);text-align:center}.side>:not(small){display:none}.main{margin:0;border-radius:0;min-height:calc(100vh - 60px);align-content:center}.mobile-logo{display:block;height:34px;margin-bottom:28px}}
 </style>
 </head>
 <body>
 <aside class="side">
-  <a href="/" aria-label="CrazeBingoCut home"><img src="/brand/logo-light.svg?v=2" alt="CrazeBingoCut"></a>
+  <a href="/" aria-label="CrazeBingoCut home"><img src="/brand/logo-light.svg?v=4" alt="CrazeBingoCut"></a>
   <div>
     <h1>Clips from every stream, <em>without watching all of it.</em></h1>
     <ul>
@@ -85,10 +86,10 @@ input::placeholder{color:var(--faint)}
       <li><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><span>Free and open source: runs on your own AI key</span></li>
     </ul>
   </div>
-  <small>© <span id="year"></span> CrazeBingoCut · <a href="/privacy" style="color:inherit">Privacy</a> · <a href="/terms" style="color:inherit">Terms</a></small>
+  <small>© <span id="year"></span> Bhautik Patel · <a href="/privacy" style="color:inherit">Privacy</a> · <a href="/terms" style="color:inherit">Terms</a> · <a href="https://github.com/Patel-Bhautik" target="_blank" rel="noopener" style="color:inherit">GitHub</a></small>
 </aside>
 <main class="main"><div class="card">
-  <a href="/"><img class="mobile-logo" src="/brand/logo.svg?v=2" alt="CrazeBingoCut"></a>
+  <a href="/"><img class="mobile-logo" src="/brand/logo-light.svg?v=4" alt="CrazeBingoCut"></a>
   <h2 id="h"></h2><p id="p"></p>
   <a class="btn" id="google" href="/auth/google/start" hidden>
     <svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.6 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.2 5.5-4.7 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.6A14.5 14.5 0 0 1 9.7 24c0-1.6.3-3.2.8-4.6l-7.9-6.2A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>

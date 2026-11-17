@@ -1,7 +1,7 @@
 """Two things people hit: captions in another language drawn on top of each other, and one clip that hangs
 keeping the whole video "in progress". Runs against the code directly, with its own empty data folder."""
 import os, re, sys, tempfile, threading, time
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-stuck-"); os.environ["DATABASE_URL"] = ""; os.environ["CBC_CLIP_MINUTES"] = "0.03"
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-stuck-"); os.environ["DATABASE_URL"] = ""; os.environ["CBC_CLIP_MINUTES"] = "0.03"
 sys.path.insert(0, ".")
 from concurrent.futures import ThreadPoolExecutor
 from studio import brain, jobs, render, roman

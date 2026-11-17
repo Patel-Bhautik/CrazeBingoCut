@@ -2,7 +2,7 @@
 so nothing leaves this machine), and only the owner is told."""
 import json, os, sys, tempfile
 from pathlib import Path
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-upd-")
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-upd-")
 os.environ.update(CBC_UPDATE_CHECK="1", DATABASE_URL="", CBC_ACCOUNTS="0", CBC_PUBLIC_URL="http://127.0.0.1:8765", CBC_AI_KEY="", CBC_AI_MODELS="")
 sys.path.insert(0, ".")
 from fastapi.testclient import TestClient
@@ -15,7 +15,7 @@ def check(n, got, want=True):
 
 # ---- which version is running: straight from .git, in each of the ways git keeps it
 real_root = config.ROOT
-fake = Path(tempfile.mkdtemp(prefix="pc-git-"))
+fake = Path(tempfile.mkdtemp(prefix="cbc-git-"))
 config.ROOT = fake
 check("no .git (a downloaded zip): the version is unknown", updates.current(), "")
 (fake / ".git" / "refs" / "heads").mkdir(parents=True)

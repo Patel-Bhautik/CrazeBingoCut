@@ -19,7 +19,7 @@ DEFAULTS = {"name": "", "channel": "", "style": "bounce", "layout": "blur", "min
             "plan": "free", "decide_mode": "both", "must_clip_min": 0, "min_gap_min": 2,
             "trigger_words": "clip that, clip it",
             "autopost": False, "accounts": [], "post_min_score": 75, "post_gap_min": 45, "daily_cap": 6,
-            "privacy": "public", "post_footer": "", "rate_per_1k": 0.0, "channels": {}}
+            "privacy": "private", "post_footer": "", "rate_per_1k": 0.0, "channels": {}}
 PLATFORMS = ("youtube", "twitch", "kick")
 
 
@@ -72,7 +72,7 @@ def _clean(data: dict) -> dict:
         elif k == "decide_mode":
             v = v if v in ("both", "either") else "both"
         elif k == "privacy":
-            v = v if v in ("public", "unlisted", "private") else "public"
+            v = v if v in ("public", "unlisted", "private", "scheduled") else "private"   # private until you choose otherwise
         else:
             v = str(v).strip()[:300]
         out[k] = v

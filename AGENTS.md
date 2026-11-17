@@ -24,6 +24,7 @@ A short map for contributors and AI coding assistants.
 | `studio/live.py` | Live recording and clipping |
 | `studio/transcribe.py`, `studio/asr_worker.py` | Speech to text, here or on a second machine |
 | `studio/render.py` | Cutting, layouts and captions (ffmpeg and Pillow) |
+| `studio/youtube.py` | One-time YouTube sign-in from your own computer (`python -m studio.youtube connect`, Desktop OAuth) |
 | `studio/media.py` | Downloading (yt-dlp), probing, audio |
 | `studio/auth.py`, `studio/account.py`, `studio/admin.py` | Sign-in, deleting things, the admin dashboard |
 | `studio/db.py` | Database tables (SQLAlchemy core; SQLite or PostgreSQL) |
@@ -44,6 +45,7 @@ A short map for contributors and AI coding assistants.
   step cannot open paths longer than 260 characters on Windows.
 - **Secrets** are read from the environment or from files named by `*_FILE` settings. Never write a key, a real
   address or a personal path into a tracked file.
-- **Pages** are plain HTML, CSS and JavaScript. Keep the existing palette, no shadows, and hover states that
-  change colour only.
+- **Pages** are plain HTML, CSS and JavaScript. Keep the dark + ember orange palette (warm charcoal `#0F0E0D`
+  pages, `#191715` panels, orange `#FF5A1F` accent with dark `#0F0E0D` text on it) and the Plus Jakarta Sans font,
+  no shadows, and hover states that change colour only.
 - Comments and messages are written in plain language for people who do not program. Keep that tone.

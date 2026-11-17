@@ -1,4 +1,5 @@
 """Post queue: decides when each finished clip goes to which account, posts it, and tracks views."""
+import re
 import secrets
 import threading
 import time
@@ -38,23 +39,53 @@ def _mirror(p):
     job = jobs.get(p["job"])
     clip = next((c for c in job["clips"] if c["id"] == p["clip"]), None) if job else None
     if clip is not None:
-        clip.setdefault("posts", {})[p["id"]] = {k: p.get(k) for k in ("account_name", "platform", "status", "url", "due_at", "error")}
+        clip.setdefault("posts", {})[p["id"]] = {k: p.get(k) for k in ("account_name", "platform", "status", "url", "due_at",
+                                                                         "publish_at", "progress", "error")}
         jobs.save(job)
+
+
+def _tomorrow(t=None):
+    lt = time.localtime((t or time.time()) + 86400)
+    return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 9, 0, 0, 0, 0, -1))  # 9:00 next day
+
+
+def _youtube_reset(t=None):
+    """Five minutes after YouTube's daily allowance renews: midnight Pacific time, which is 08:00 UTC.
+    shortcut: in US summer time it renews an hour earlier (07:00 UTC), so then this waits an hour longer than needed."""
+    t = t or time.time()
+    at = t - t % 86400 + 8 * 3600 + 300
+    return at if at > t else at + 86400
+
+
+def _when(p):
+    """When a post goes (or went) public: a scheduled YouTube post's publish time, else when it was posted or is due."""
+    return p.get("publish_at") or p.get("posted_at") or p["due_at"]
 
 
 def _next_slot(account_id, gap_min, cap):
     """Earliest time that respects the gap between posts and the daily cap for this account."""
     mine = [p for p in _mine() if p["account"] == account_id and p["status"] in OPEN + ("posted",)]
-    t = max(time.time(), max((p.get("posted_at") or p["due_at"] for p in mine), default=0) + gap_min * 60)
+    t = max(time.time(), max((_when(p) for p in mine), default=0) + gap_min * 60)
     for _ in range(30):
-        if sum(1 for p in mine if _day(p.get("posted_at") or p["due_at"]) == _day(t)) < cap:
+        if sum(1 for p in mine if _day(_when(p)) == _day(t)) < cap:
             break
-        lt = time.localtime(t + 86400)
-        t = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 9, 0, 0, 0, 0, -1))  # 9:00 next day
+        t = _tomorrow(t)
     return t
 
 
-def enqueue(job, clip, account_ids, now=False) -> list:
+class _Tomorrow(Exception):
+    """A limit for today is reached: the post waits for tomorrow morning, and it does not count as a failed try."""
+
+
+def _youtube_today() -> int:
+    """YouTube uploads made today from this machine, all channels together (YouTube's allowance is per Google project)."""
+    today = _day(time.time())
+    return sum(1 for p in _posts if p["platform"] == "youtube" and p["status"] == "posted" and _day(p["posted_at"]) == today)
+
+
+def enqueue(job, clip, account_ids, now=False, at=None) -> list:
+    """Queue a clip for these accounts. `now`: straight away. `at`: at the time you picked (YouTube: uploaded now and
+    made public by YouTube then). Neither: the creator's next free slot (gap between posts, daily cap)."""
     c = creators.get(job["creator"]) or creators.DEFAULTS
     made = []
     with _lock:
@@ -65,10 +96,13 @@ def enqueue(job, clip, account_ids, now=False) -> list:
             if any(p["job"] == job["id"] and p["clip"] == clip["id"] and p["account"] == aid
                    and p["status"] in OPEN + ("posted",) for p in _mine()):
                 continue  # never post the same clip to the same account twice
-            due = time.time() if now else _next_slot(aid, c["post_gap_min"], c["daily_cap"])
+            slot = at or (time.time() if now else _next_slot(aid, c["post_gap_min"], c["daily_cap"]))
+            # Scheduled on YouTube: upload straight away as private; YouTube itself makes it public at the slot.
+            ahead = acc["platform"] == "youtube" and (bool(at) or (c["privacy"] == "scheduled" and not now))
             p = {"id": secrets.token_hex(8), "user": ctx.uid(), "job": job["id"], "clip": clip["id"], "creator": job["creator"],
                  "account": aid, "account_name": acc["name"], "platform": acc["platform"], "status": "scheduled",
-                 "due_at": due, "created": time.time(), "title": clip.get("title") or clip.get("hook") or "Clip",
+                 "due_at": time.time() if ahead else slot, "publish_at": slot if ahead else None, "progress": 0,
+                 "created": time.time(), "title": clip.get("title") or clip.get("hook") or "Clip",
                  "score": clip.get("score", 0), "tries": 0, "url": "", "remote_id": "", "error": None, "views": None}
             _posts.append(p)
             made.append(p)
@@ -90,9 +124,21 @@ def on_clip_ready(job, clip):
         creators.log(c["id"], f"Queued for {len(made)} account(s): {clip.get('title') or clip.get('hook')}")
 
 
-def _caption(clip, creator):
-    tags = " ".join("#" + h for h in clip.get("hashtags", []))
-    return "\n\n".join(x for x in (clip.get("description", ""), tags, creator.get("post_footer", "")) if x)
+def hashtags(clip, last: str = "") -> str:
+    """The AI's hashtags, then its search tags as hashtags ("epic clutch" -> #EpicClutch), without repeats. At most 15
+    in all, `last` included: YouTube ignores every hashtag in a description that has more than 15."""
+    seen, out = {last.lower()}, []
+    for t in [*clip.get("hashtags", []), *clip.get("tags", [])]:
+        words = str(t).split()
+        h = re.sub(r"\W", "", "".join(w[:1].upper() + w[1:] for w in words) if len(words) > 1 else str(t))
+        if h and h.lower() not in seen:
+            seen.add(h.lower())
+            out.append("#" + h)
+    return " ".join(out[:14 if last else 15] + (["#" + last] if last else []))
+
+
+def _caption(clip, creator, last=""):
+    return "\n\n".join(x for x in (clip.get("description", ""), hashtags(clip, last), creator.get("post_footer", "")) if x)
 
 
 def _post(p):
@@ -107,25 +153,45 @@ def _post(p):
         path = Path(job["dir"]) / "clips" / clip["file"]
         creator = creators.get(job["creator"]) or dict(creators.DEFAULTS, name="clips")
         title, cap = clip.get("title") or clip.get("hook") or "Clip", _caption(clip, creator)
+        # "scheduled" whose time has come (or on TikTok, which has no scheduling here) simply means public
+        # A post with a go-public time was asked to be public then: if that time has already passed, it goes public now.
+        privacy = "public" if creator["privacy"] == "scheduled" or p.get("publish_at") else creator["privacy"]
+        at = None
         if acc["platform"] == "youtube":
-            rid, url = accounts.youtube_upload(acc, path, title, cap + "\n\n#Shorts", clip.get("hashtags", []), creator["privacy"])
+            if _youtube_today() >= config.YT_DAILY_LIMIT:
+                raise _Tomorrow(f"Today's YouTube upload limit ({config.YT_DAILY_LIMIT}, set by CBC_YT_DAILY_LIMIT) is reached.")
+            if (p.get("publish_at") or 0) > time.time() + 300:
+                at = p["publish_at"]
+            rid, url = accounts.youtube_upload(acc, path, title, _caption(clip, creator, "Shorts"), clip.get("tags") or clip.get("hashtags", []),
+                                               privacy, at, progress=lambda n: (p.update(progress=n), _mirror(p)))
         elif acc["platform"] == "instagram":
             rid, url = accounts.instagram_upload(acc, path, f"{title}\n\n{cap}", job["id"])
         elif acc["platform"] == "tiktok":
-            rid, url = accounts.tiktok_upload(acc, path, f"{title}\n\n{cap}", creator["privacy"])
+            rid, url = accounts.tiktok_upload(acc, path, f"{title}\n\n{cap}", privacy)
         else:
             raise RuntimeError("That kind of account is no longer supported.")
-        p.update(status="posted", posted_at=time.time(), remote_id=rid, url=url, error=None)
-        creators.log(p["creator"], f"Posted to {acc['name']}: {title}")
+        p.update(status="posted", posted_at=time.time(), remote_id=rid, url=url, error=None, publish_at=at)
+        creators.log(p["creator"], f"Uploaded to {acc['name']}, goes public {time.strftime('%d %b %H:%M', time.localtime(at))}: {title}"
+                     if at else f"Posted to {acc['name']}: {title}")
     except Exception as e:  # noqa: BLE001
-        p["tries"] += 1
         p["error"] = str(e)[-300:]
-        if p["tries"] < 3 and clip and acc:
-            p.update(status="scheduled", due_at=time.time() + 600)  # try again in 10 minutes
+        if isinstance(e, _Tomorrow):
+            p.update(status="scheduled", due_at=_tomorrow(), progress=0, error=str(e) + " Trying again tomorrow morning.")
+        elif "quotaExceeded" in str(e) or "uploadLimitExceeded" in str(e):
+            # YouTube refused more uploads today: retrying sooner would only fail again, so wait for its renewal
+            due = _youtube_reset()
+            why = "quotaExceeded" if "quotaExceeded" in str(e) else "uploadLimitExceeded"
+            p.update(status="scheduled", due_at=due, progress=0,
+                     error=f"YouTube refused more uploads today ({why}). Trying again at {time.strftime('%a %H:%M', time.localtime(due))}, "
+                           "when YouTube's daily allowance renews.")
         else:
-            p["status"] = "failed"
-            creators.log(p["creator"], f"Post failed on {p['account_name']}: {p['error']}")
-            alerts.notify(f"post failed on {p['account_name']} ({p['title']}): {p['error'][:200]}", kind="post")
+            p["tries"] += 1
+            if p["tries"] < 3 and clip and acc:
+                p.update(status="scheduled", due_at=time.time() + 600, progress=0)  # try again in 10 minutes
+            else:
+                p["status"] = "failed"
+                creators.log(p["creator"], f"Post failed on {p['account_name']}: {p['error']}")
+                alerts.notify(f"post failed on {p['account_name']} ({p['title']}): {p['error'][:200]}", kind="post")
     _save()
     _mirror(p)
 
@@ -191,7 +257,7 @@ def retry(pid):
         p = next((p for p in _mine() if p["id"] == pid), None)
         if not p or p["status"] not in ("failed", "cancelled"):
             raise ValueError("Only failed or cancelled posts can be retried.")
-        p.update(status="scheduled", due_at=time.time(), tries=0, error=None)
+        p.update(status="scheduled", due_at=time.time(), tries=0, error=None, progress=0)
         _save()
     _mirror(p)
 

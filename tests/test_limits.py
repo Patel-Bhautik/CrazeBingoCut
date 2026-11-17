@@ -1,7 +1,7 @@
 """No limits by default on your own CrazeBingoCut: many recordings at once (each kept with its own creator), five videos
 at once, any number of creators. Runs against the code directly, with its own empty data folder."""
 import os, sys, tempfile
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-lim-")
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-lim-")
 for k in ("CBC_MAX_LIVE_PER_USER", "CBC_MAX_JOBS_PER_USER", "CBC_MAX_UPLOAD_MB", "CBC_MAX_VIDEO_HOURS",
           "CBC_MAX_LIVE_HOURS", "CBC_MAX_USER_GB", "CBC_MAX_CREATORS"):
     os.environ.pop(k, None)

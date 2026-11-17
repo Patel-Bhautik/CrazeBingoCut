@@ -2,7 +2,7 @@
 stand-ins answering the way their documentation says, so nothing leaves this machine."""
 import json, os, sys, tempfile, time
 from urllib.parse import parse_qs, urlparse
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-connect-")
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-connect-")
 os.environ.update(DATABASE_URL="", CBC_ACCOUNTS="1", CBC_PUBLIC_URL="https://clips.example.com", CBC_VERIFY_EMAIL="0",
                   GOOGLE_CLIENT_ID="", GOOGLE_CLIENT_SECRET="", GOOGLE_CLIENT_FILE="", CBC_IG_APP_ID="", CBC_IG_APP_SECRET="",
                   CBC_TIKTOK_CLIENT_KEY="", CBC_TIKTOK_CLIENT_SECRET="")
@@ -186,6 +186,191 @@ with ctx.as_user(user.id):
     acc = accounts.get(ttacc["id"]); acc["expires"] = 0; accounts._put(acc)
     accounts._tt_token(accounts.get(ttacc["id"]))
     check("TikTok: an old sign-in is renewed, and the new refresh token kept", accounts.get(ttacc["id"])["refresh_token"], "tt-refresh-2")
+
+# ---- YouTube Shorts: what YouTube is told, the queue's rules, and its limits (no Google libraries needed)
+from studio import creators, posting
+meta = accounts._yt_meta("A <b>title</b>", "Text", ["clutch play", "fps,game", ""], "weird")
+check("YouTube: an unknown visibility becomes private", meta["status"]["privacyStatus"], "private")
+check("YouTube: tags cleaned, empty ones dropped", (meta["snippet"]["tags"], meta["snippet"]["title"]), (["clutch play", "fpsgame"], "A btitle/b"))
+check("YouTube: public when asked", accounts._yt_meta("t", "d", [], "public")["status"]["privacyStatus"], "public")
+meta = accounts._yt_meta("t", "d", [], "public", publish_at=1893456000)
+check("YouTube: scheduled = uploaded private, made public by YouTube at the time",
+      (meta["status"]["privacyStatus"], meta["status"]["publishAt"]), ("private", "2030-01-01T00:00:00Z"))
+check("YouTube: hundreds of tags are cut to fit", len(",".join(accounts._yt_meta("t", "d", ["x" * 30] * 40, "private")["snippet"]["tags"])) <= 450)
+check("posts are private by default", (creators.DEFAULTS["privacy"], creators._clean({"privacy": "bogus"})["privacy"],
+                                       creators._clean({"privacy": "scheduled"})["privacy"]), ("private", "private", "scheduled"))
+
+ytid = accs["youtube"]["id"]
+with ctx.as_user(user.id):
+    cr = creators.create({"name": "Shorts Tester", "privacy": "scheduled", "post_gap_min": 60, "daily_cap": 5, "accounts": [ytid]})
+    jd2 = config.user_dir(user.id) / "jobs" / "job-shorts01" / "clips"
+jd2.mkdir(parents=True)
+mk = lambda cid: {"id": cid, "status": "done", "file": f"{cid}.mp4", "title": f"Big play {cid}", "description": "What happens.",
+                  "hashtags": ["gaming"], "tags": ["epic clutch"], "score": 90}
+(jd2.parent / "job.json").write_text(json.dumps({"id": "job-shorts01", "user": user.id, "dir": str(jd2.parent), "status": "done",
+                                                 "clips": [mk("clip01"), mk("clip02"), mk("clip03")], "creator": cr["id"], "created": time.time(),
+                                                 "options": {}, "source": {"type": "file"}}), encoding="utf-8")
+jobs.load_user(user.id)
+sent, real_upload = [], accounts.youtube_upload
+def fake_upload(acc, path, title, desc, tags, privacy, publish_at=None, progress=None):
+    sent.append({"title": title, "desc": desc, "tags": tags, "privacy": privacy, "at": publish_at})
+    if fake_upload.fail:
+        raise RuntimeError(fake_upload.fail)
+    progress(50)
+    return "ytvid1", "https://www.youtube.com/shorts/ytvid1"
+fake_upload.fail = None
+accounts.youtube_upload = fake_upload
+with ctx.as_user(user.id):
+    job = jobs.get("job-shorts01")
+    now = time.time()
+    p1, = posting.enqueue(job, job["clips"][0], [ytid])
+    p2, = posting.enqueue(job, job["clips"][1], [ytid])
+    check("scheduled: uploads go now, going public one gap apart",
+          (p1["due_at"] <= now + 5, p2["due_at"] <= now + 5, p2["publish_at"] - p1["publish_at"] >= 3590), (True, True, True))
+    check("the same clip is never queued twice for one channel", posting.enqueue(job, job["clips"][0], [ytid]), [])
+    posting._post(p2)
+    check("scheduled: uploaded with its go-public time, the AI's search tags, and #Shorts",
+          (p2["status"], sent[-1]["at"] == p2["publish_at"], sent[-1]["tags"], sent[-1]["desc"].endswith("#Shorts")),
+          ("posted", True, ["epic clutch"], True))
+    check("the description carries the AI's hashtags and search tags as hashtags, then #Shorts",
+          sent[-1]["desc"], "What happens.\n\n#gaming #EpicClutch #Shorts")
+    many = posting.hashtags({"hashtags": ["Gaming", "fps", "shorts"], "tags": ["gaming", "big clutch"] + [f"tag {i}" for i in range(30)]}, "Shorts")
+    check("at most 15 hashtags, no repeats in any case, #Shorts kept last (YouTube ignores them all past 15)",
+          (len(many.split()), many.split()[:3], many.split()[-1], many.lower().count("#gaming"), many.lower().count("#shorts")),
+          (15, ["#Gaming", "#fps", "#BigClutch"], "#Shorts", 1, 1))
+    check("upload progress reaches the clip card", (p2["progress"], jobs.get("job-shorts01")["clips"][1]["posts"][p2["id"]]["progress"]), (50, 50))
+    fake_upload.fail = '<HttpError 403 "The request cannot be completed because you have exceeded your quota." "reason": "quotaExceeded">'
+    posting._post(p1)
+    check("YouTube refuses more uploads today: waits until its allowance renews, not counted as a failed try, reason shown",
+          (p1["status"], p1["tries"], p1["due_at"] == posting._youtube_reset(), "quotaExceeded" in p1["error"]), ("scheduled", 0, True, True))
+    check("YouTube's allowance renews just after midnight Pacific (08:00 UTC), within the next day",
+          [time.strftime("%H:%M", time.gmtime(posting._youtube_reset(x))) for x in (1700000000, 1700000000 + 3 * 3600)]
+          + [0 < posting._youtube_reset() - time.time() <= 86400], ["08:05", "08:05", True])
+    fake_upload.fail = "Uploading to YouTube failed (500)"
+    posting._post(p1)
+    check("other errors: tried again in 10 minutes", (p1["status"], p1["tries"], p1["due_at"] < time.time() + 700), ("scheduled", 1, True))
+    fake_upload.fail, n, limit = None, len(sent), config.YT_DAILY_LIMIT
+    config.YT_DAILY_LIMIT = 1                     # one upload already made today (p2)
+    posting._post(p1)
+    check("CBC_YT_DAILY_LIMIT reached: nothing is sent, the post waits for tomorrow",
+          (len(sent) == n, p1["status"], p1["tries"], "limit" in p1["error"]), (True, "scheduled", 1, True))
+    config.YT_DAILY_LIMIT = limit
+
+# ---- a time picked in the clip dialog's Schedule box, and many clips posted at once (the page calls /api/posts per clip)
+ttid, soon = accs["tiktok"]["id"], time.time() + 7200
+pick = lambda **kw: b.post("/api/posts", json={"job": "job-shorts01", "clip": "clip03", "accounts": [ytid], **kw}, headers=ORIGIN)
+check("a picked time must be a time at least 5 minutes ahead", [pick(at=x).status_code for x in (time.time() - 60, "tomorrow", time.time() + 120)], [400, 400, 400])
+r = b.post("/api/posts", json={"job": "job-shorts01", "clip": "clip03", "accounts": [ytid, ttid], "at": soon}, headers=ORIGIN)
+with ctx.as_user(user.id):
+    mine = {p["platform"]: p for p in posting._mine() if p["clip"] == "clip03"}
+check("picked time on YouTube: uploaded now, and YouTube makes it public at that time",
+      (r.status_code, mine["youtube"]["due_at"] <= time.time() + 5, mine["youtube"]["publish_at"]), (200, True, soon))
+check("picked time on TikTok: posted at that time", (mine["tiktok"]["due_at"], mine["tiktok"]["publish_at"]), (soon, None))
+check("the same clip to the same account again is refused", pick(now=True).status_code, 400)
+with ctx.as_user(user.id):
+    creators.update(cr["id"], {"privacy": "private"})
+    posting._post(mine["youtube"])
+check("picked time works whatever the creator's visibility setting: sent with its go-public time",
+      (mine["youtube"]["status"], sent[-1]["at"], sent[-1]["privacy"]), ("posted", soon, "public"))
+codes = [b.post("/api/posts", json={"job": "job-shorts01", "clip": c, "accounts": [ttid], "now": True}, headers=ORIGIN).status_code
+         for c in ("clip01", "clip02", "clip03")]
+check("Post now for many clips: each new one is queued, one already queued there is skipped", codes, [200, 200, 400])
+check("the page is told the daily YouTube limit", b.get("/api/status").json()["yt_daily_limit"], config.YT_DAILY_LIMIT)
+accounts.youtube_upload = real_upload
+
+# ---- YouTube through Google's own libraries: upload in pieces, Desktop sign-in, renewing it
+try:
+    import google_auth_oauthlib.flow, googleapiclient.discovery
+    from googleapiclient.http import HttpMockSequence
+    libs = True
+except ImportError:
+    libs = False
+check("Google's YouTube libraries are installed (pip install -r requirements.txt)", libs)
+if libs:
+    from types import SimpleNamespace as NS
+    from studio import youtube
+    real_yt, real_service = accounts._yt, accounts._yt_service
+    accounts._yt = lambda acc: googleapiclient.discovery.build("youtube", "v3", static_discovery=True, http=HttpMockSequence([
+        ({"status": "200", "location": "https://upload.example/session1"}, ""),
+        ({"status": "200"}, json.dumps({"id": "ytvid9"}))]))
+    seen = []
+    with ctx.as_user(user.id):
+        got = accounts.youtube_upload(accounts.get(ytid), jd / "clip01.mp4", "Title", "Text", ["tag"], "private", progress=seen.append)
+    check("YouTube upload: resumable, through the YouTube Data API, with the Shorts link", got, ("ytvid9", "https://www.youtube.com/shorts/ytvid9"))
+    check("YouTube upload: progress ends at 100%", seen[-1:], [100])
+    yt_http = real_service(NS(token="t", expiry=None))._http.http
+    check("YouTube upload: a 308 'piece received' is not followed as a redirect (big clips go in several pieces)",
+          (308 in yt_http.redirect_codes, yt_http.timeout), (False, 120))
+
+    client = Path(os.environ["CBC_DATA"]) / "youtube_client.json"
+    client.write_text(json.dumps({"installed": {"client_id": "desk-123.apps.googleusercontent.com", "client_secret": "desk-secret-value",
+                                                "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",
+                                                "redirect_uris": ["http://localhost"]}}), encoding="utf-8")
+    config.YT_CLIENT_FILE = client
+    config._kept.pop("youtube_desktop", None)
+    asked = {}
+    class Flow:
+        def run_local_server(self, **kw):
+            asked.update(kw)
+            return NS(refresh_token="desk-refresh", token="desk-access", expiry=None)
+    google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file = lambda f, scopes: Flow()
+    channel = NS(channels=lambda: NS(list=lambda **kw: NS(execute=lambda: {"items": [{"id": "UC999", "snippet": {"title": "Desk Channel"}}]})))
+    accounts._yt_service = lambda creds: channel
+    acc = youtube.connect(user.id)
+    del google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file   # the inherited one is back
+    accounts._yt_service = real_service
+    check("Desktop sign-in: the browser flow answers on a one-off 127.0.0.1 port, asking for a lasting sign-in",
+          (asked["host"], asked["port"], asked["access_type"], asked["open_browser"]), ("127.0.0.1", 0, "offline", True))
+    with ctx.as_user(user.id):
+        saved = accounts.get("yt_UC999")
+        stored = (config.user_dir(user.id) / "accounts" / "accounts.json").read_text(encoding="utf-8")
+    check("Desktop sign-in: the channel is saved with the other connected apps", (saved["name"], saved["client"], saved["refresh_token"]),
+          ("Desk Channel", "desktop", "desk-refresh"))
+    check("Desktop sign-in: the client secret is never stored with the account", "desk-secret-value" in stored, False)
+    check("Desktop sign-in: tokens never reach the page", "desk-refresh" in b.get("/api/accounts").text, False)
+
+    from google.oauth2.credentials import Credentials
+    from datetime import datetime, timedelta, timezone
+    used, real_refresh = [], Credentials.refresh
+    def fake_refresh(self, request):
+        used.append(self.client_id)
+        self.token, self.expiry = "desk-access-2", datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
+    Credentials.refresh = fake_refresh
+    with ctx.as_user(user.id):
+        acc = accounts.get("yt_UC999"); acc["expires"] = 0; accounts._put(acc)
+        accounts._yt_creds(accounts.get("yt_UC999"))
+        renewed = accounts.get("yt_UC999")
+        accounts._yt_creds(renewed)
+        web = accounts.get(ytid); web["expires"] = 0; accounts._put(web)     # connected earlier with the Connect button
+        accounts._yt_creds(accounts.get(ytid))
+    check("an expired sign-in is renewed with the Desktop client, and the new token kept",
+          (used[0], renewed["access_token"], renewed["expires"] > time.time() + 3000), ("desk-123.apps.googleusercontent.com", "desk-access-2", True))
+    check("a channel connected with the Connect button still renews with the web client", used[1:], ["g-client-123.apps"])
+    from google.auth.exceptions import RefreshError
+    def revoked(self, request):
+        raise RefreshError("invalid_grant: Token has been expired or revoked.")
+    Credentials.refresh = revoked
+    with ctx.as_user(user.id):
+        acc = accounts.get("yt_UC999"); acc["expires"] = 0; accounts._put(acc)
+        try:
+            accounts._yt_creds(accounts.get("yt_UC999")); said = ""
+        except RuntimeError as e:
+            said = str(e)
+    Credentials.refresh = real_refresh
+    check("a revoked sign-in says plainly to connect again", "studio.youtube connect" in said)
+
+    # YouTube's real "quota used up" answer, through the real upload code, reaches the queue's wait-for-tomorrow rule
+    (jd2 / "clip01.mp4").write_bytes(b"\x00" * 6_000)
+    quota = json.dumps({"error": {"code": 403, "message": "The request cannot be completed because you have exceeded your quota.",
+                                  "errors": [{"message": "quota", "domain": "youtube.quota", "reason": "quotaExceeded"}]}})
+    accounts._yt = lambda acc: googleapiclient.discovery.build("youtube", "v3", static_discovery=True,
+                                                              http=HttpMockSequence([({"status": "403"}, quota)]))
+    with ctx.as_user(user.id):
+        tries = p1["tries"]
+        posting._post(p1)
+    check("YouTube's real quota error: the post waits for tomorrow, not counted as a failed try",
+          (p1["status"], p1["tries"] == tries, p1["due_at"] == posting._youtube_reset()), ("scheduled", True, True))
+    accounts._yt = real_yt
 
 print("ALL PASSED" if not fails else f"{len(fails)} failed")
 import shutil; db.engine.dispose(); shutil.rmtree(os.environ["CBC_DATA"], ignore_errors=True)

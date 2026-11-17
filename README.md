@@ -91,10 +91,67 @@ Everything is set through environment variables, normally in a `.env` file next 
 | `CBC_AI_PROVIDER`, `CBC_AI_MODELS`, `CBC_AI_KEY` | The AI that picks clips and writes titles (or set it in the dashboard) |
 | `CBC_ACCOUNTS` | `1` makes everyone sign in. Use it on any server other people can reach |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional: Sign in with Google, and connecting YouTube |
+| `CBC_YT_CLIENT_FILE`, `CBC_YT_DAILY_LIMIT` | Optional: posting Shorts from your own computer (see below) |
 | `CBC_SMTP_*`, `CBC_MAIL_FROM` | Optional: confirmation and password emails |
 | `CBC_DATA` | Where videos, clips and the database are kept (default `./data`) |
 
 `.env`, the `secrets/` folder and all user data are ignored by git. Keep keys there, never in the code.
+
+## Post Shorts to YouTube
+
+CrazeBingoCut can upload finished clips to your channel by itself, with the title, description, hashtags and search
+tags the AI wrote. It all runs on your computer; no public address is needed.
+
+**Once, in Google Cloud** ([console.cloud.google.com](https://console.cloud.google.com)):
+
+1. Create a project, and under APIs & Services, Library, turn on **YouTube Data API v3**.
+2. Under OAuth consent screen: choose External, fill in the app name and your email, and add yourself as a
+   **test user**.
+3. Under Credentials: Create credentials, OAuth client ID, type **Desktop app**. Download the JSON and save it as
+   `secrets/youtube_client.json` in this folder (or set `CBC_YT_CLIENT_FILE` to where you put it).
+
+**Once, on your computer:** `pip install -r requirements.txt`, then
+
+    python -m studio.youtube connect
+
+Your browser opens on Google's page. Allow access, and the channel appears under Settings, Connected apps. The
+sign-in is kept in your data folder (readable by your user only) and renewed by itself. Connect a second channel
+the same way. (With `CBC_ACCOUNTS=1`, add the email of your CrazeBingoCut account after `connect`.)
+
+**Then, in a creator's settings:**
+
+- tick the channel;
+- choose **who can see posts**:
+  - Private (the default);
+  - Unlisted;
+  - Public;
+  - Scheduled: uploaded straight away as private, and YouTube makes it public at its slot, even if your computer is
+    off then;
+- set the minutes between posts and the most posts a day;
+- turn on **Auto-post** if clips should go out without you pressing Post.
+
+The Post queue on the home page shows each upload's progress, when it goes public, and its link.
+
+**To post by hand:**
+- **One clip:** in a clip's window, tick an account and press Post now. To pick a time instead, tick **Schedule**
+  and choose it. YouTube clips are uploaded straight away as private and YouTube makes them public at that time.
+  Instagram and TikTok are posted at that time, while CrazeBingoCut is running.
+- **Many clips:** select videos or clips, then press **Post now** in the bar at the bottom. They upload one after
+  another.
+
+**What protects you:**
+
+- A clip is never posted twice to the same channel. Every post is kept in `posts.json` in the data folder.
+- A failed upload is tried again in 10 minutes, up to three times.
+- At most `CBC_YT_DAILY_LIMIT` uploads a day (6 by default) leave this machine. When YouTube says the day's allowance
+  is used up, the post waits until the next morning instead of failing.
+
+**Two Google rules to know:**
+
+- **Videos stay private until Google audits your project.** Until your Google Cloud project passes YouTube's audit
+  (the API Services audit form), YouTube keeps every video uploaded through it private, whatever you choose here.
+- **The sign-in lasts 7 days while the app is in Testing.** As long as the consent screen is in "Testing", run
+  `connect` again weekly, or press "Publish app" on the consent screen.
 
 ## Admins
 

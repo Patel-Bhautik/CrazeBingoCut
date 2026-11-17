@@ -2,7 +2,7 @@
 the next start, before anything is open. Uses its own temporary folders; nothing else is touched."""
 import json, os, subprocess, sys, tempfile
 from pathlib import Path
-base = Path(tempfile.mkdtemp(prefix="pc-stor-"))
+base = Path(tempfile.mkdtemp(prefix="cbc-stor-"))
 old, new, pointer = base / "old-data", base / "bigger drive" / "CrazeBingoCut", base / "storage.json"
 os.environ.pop("CBC_DATA", None); os.environ.pop("CBC_MODELS", None)
 os.environ.update(DATABASE_URL="", CBC_STORAGE_FILE=str(pointer), CBC_ACCOUNTS="0", CBC_PUBLIC_URL="http://127.0.0.1:8765")

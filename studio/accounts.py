@@ -325,42 +325,98 @@ def _youtube_finish(code: str) -> dict:
     return acc
 
 
-def _yt_token(acc) -> str:
-    if acc.get("expires", 0) > time.time():
-        return acc["access_token"]
-    cid, secret = app_keys("google")
-    tok = _check(httpx.post("https://oauth2.googleapis.com/token", data={
-        "client_id": cid, "client_secret": secret,
-        "refresh_token": acc["refresh_token"], "grant_type": "refresh_token"}, timeout=30),
-        "Refreshing the YouTube sign-in").json()
-    acc.update(access_token=tok["access_token"], expires=time.time() + tok.get("expires_in", 3600) - 60)
-    _put(acc)
-    return acc["access_token"]
+# Uploading, renewing the sign-in and reading views go through Google's own libraries (google-api-python-client,
+# google-auth). They are imported only here, so the rest of CrazeBingoCut runs even before they are installed.
+NEED_LIBS = "The YouTube libraries are not installed. Run:  pip install -r requirements.txt"
 
 
-def youtube_upload(acc, path: Path, title: str, description: str, tags: list, privacy: str):
-    token = _yt_token(acc)
-    meta = {"snippet": {"title": re.sub(r"[<>]", "", title)[:100] or "Clip", "description": re.sub(r"[<>]", "", description)[:4900],
-                        "tags": tags[:15], "categoryId": "20"},
-            "status": {"privacyStatus": privacy, "selfDeclaredMadeForKids": False}}
-    size = path.stat().st_size
-    start = _check(httpx.post("https://www.googleapis.com/upload/youtube/v3/videos",
-                              params={"uploadType": "resumable", "part": "snippet,status"}, json=meta,
-                              headers={"Authorization": f"Bearer {token}", "X-Upload-Content-Type": "video/mp4",
-                                       "X-Upload-Content-Length": str(size)}, timeout=60), "Starting the YouTube upload")
-    with path.open("rb") as f:
-        done = _check(httpx.put(start.headers["Location"], content=f.read(),
-                                headers={"Authorization": f"Bearer {token}", "Content-Type": "video/mp4"}, timeout=900),
-                      "Uploading to YouTube").json()
+def _expiry(creds) -> float:
+    """When a Google access token stops working, as a timestamp, a minute early. google-auth keeps it as naive UTC."""
+    from datetime import timezone
+    return (creds.expiry.replace(tzinfo=timezone.utc).timestamp() if creds.expiry else time.time() + 3600) - 60
+
+
+def _yt_creds(acc):
+    """Google credentials for this account. An expired access token is renewed with the saved refresh token, and
+    the new one is saved. The OAuth client is the Desktop app one for channels connected with
+    `python -m studio.youtube connect`, and the web one for channels connected with the Connect button."""
+    try:
+        import google_auth_httplib2
+        import httplib2
+        from google.auth.exceptions import RefreshError
+        from google.oauth2.credentials import Credentials
+    except ImportError as e:
+        raise RuntimeError(NEED_LIBS) from e
+    from datetime import datetime, timezone
+    cid, secret = config.youtube_desktop_client() if acc.get("client") == "desktop" else app_keys("google")
+    creds = Credentials(acc.get("access_token"), refresh_token=acc["refresh_token"], token_uri="https://oauth2.googleapis.com/token",
+                        client_id=cid, client_secret=secret, scopes=YT_SCOPES.split())
+    creds.expiry = datetime.fromtimestamp(acc.get("expires", 0), timezone.utc).replace(tzinfo=None)
+    if not creds.valid:
+        try:
+            creds.refresh(google_auth_httplib2.Request(httplib2.Http(timeout=30)))
+        except RefreshError as e:
+            raise RuntimeError("The YouTube sign-in has expired or was removed. Connect the channel again: "
+                               "python -m studio.youtube connect (or Settings, Connected apps).") from e
+        acc.update(access_token=creds.token, refresh_token=creds.refresh_token or acc["refresh_token"], expires=_expiry(creds))
+        _put(acc)
+    return creds
+
+
+def _yt_service(creds):
+    """The YouTube Data API v3 with these credentials. Network calls give up after two minutes instead of hanging."""
+    import google_auth_httplib2
+    from googleapiclient.discovery import build
+    from googleapiclient.http import build_http
+    http = build_http()       # Google's own setup: a 308 "piece received, send the next" is not a redirect
+    http.timeout = 120
+    return build("youtube", "v3", http=google_auth_httplib2.AuthorizedHttp(creds, http=http), cache_discovery=False)
+
+
+def _yt(acc):
+    return _yt_service(_yt_creds(acc))
+
+
+def _yt_meta(title: str, description: str, tags: list, privacy: str, publish_at: float = None) -> dict:
+    """What YouTube is told about the video. Anything unexpected for privacy becomes private. With publish_at, the
+    video is uploaded private and YouTube itself makes it public at that time, even if this computer is off."""
+    tags = [re.sub(r"[<>,]", "", str(t)).strip()[:30] for t in tags if str(t).strip()][:15]
+    while len(",".join(tags)) > 450:      # YouTube refuses tags over 500 characters in all (it counts quotes too)
+        tags.pop()
+    status = {"privacyStatus": privacy if privacy in ("public", "unlisted", "private") else "private",
+              "selfDeclaredMadeForKids": False}
+    if publish_at:
+        status.update(privacyStatus="private", publishAt=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(publish_at)))
+    return {"snippet": {"title": re.sub(r"[<>]", "", title)[:100] or "Clip", "description": re.sub(r"[<>]", "", description)[:4900],
+                        "tags": tags, "categoryId": "20"}, "status": status}
+
+
+def youtube_upload(acc, path: Path, title: str, description: str, tags: list, privacy: str, publish_at: float = None,
+                   progress=None):
+    """Upload in 4 MB pieces, telling `progress` the percentage after each. A piece that fails on the network or with a
+    server error is sent again (three times) before the whole upload is given up."""
+    yt = _yt(acc)                     # first: it says plainly if the libraries are missing
+    from googleapiclient.http import MediaFileUpload
+    media = MediaFileUpload(str(path), mimetype="video/mp4", chunksize=4 * 1024 * 1024, resumable=True)
+    try:
+        req = yt.videos().insert(part="snippet,status", body=_yt_meta(title, description, tags, privacy, publish_at),
+                                       media_body=media)
+        done = None
+        while done is None:
+            status, done = req.next_chunk(num_retries=3)
+            if status and progress:
+                progress(int(status.progress() * 100))
+    finally:
+        media.stream().close()        # let go of the file, so the clip can be deleted later (Windows)
+    if progress:
+        progress(100)
     return done["id"], f"https://www.youtube.com/shorts/{done['id']}"
 
 
 def youtube_views(acc, ids: list) -> dict:
-    out = {}
+    out, yt = {}, _yt(acc)
     for i in range(0, len(ids), 50):
-        r = _check(httpx.get("https://www.googleapis.com/youtube/v3/videos",
-                             params={"part": "statistics", "id": ",".join(ids[i:i + 50])},
-                             headers={"Authorization": f"Bearer {_yt_token(acc)}"}, timeout=30), "Reading YouTube views").json()
+        r = yt.videos().list(part="statistics", id=",".join(ids[i:i + 50])).execute(num_retries=2)
         for it in r.get("items", []):
             out[it["id"]] = int(it["statistics"].get("viewCount", 0))
     return out

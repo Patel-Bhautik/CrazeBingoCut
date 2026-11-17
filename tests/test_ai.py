@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-ai-")
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-ai-")
 os.environ["DATABASE_URL"] = ""
 os.environ.update(CBC_AI_PROVIDER="gemini", CBC_AI_MODELS="model-a, model-b", CBC_AI_KEY="test-key-123456", CBC_AI_BASE_URL="")
 sys.path.insert(0, ".")

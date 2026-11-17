@@ -1,7 +1,7 @@
 """Deleting clips, videos, creators and accounts, bulk actions and the zip download. Runs against the code directly,
 with its own empty data folder: nothing outside it is touched."""
 import os, sys, tempfile, zipfile
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-del-"); os.environ["DATABASE_URL"] = ""
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-del-"); os.environ["DATABASE_URL"] = ""
 sys.path.insert(0, ".")
 from pathlib import Path
 import sqlalchemy as sa

@@ -1,7 +1,7 @@
 """Hindi and Urdu captions come out in Roman letters (Hinglish): the same words at the same moments, never
 translated. The AI is replaced by a stand-in, so nothing leaves this machine."""
 import os, sys, tempfile
-os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="pc-roman-"); os.environ["DATABASE_URL"] = ""
+os.environ["CBC_DATA"] = tempfile.mkdtemp(prefix="cbc-roman-"); os.environ["DATABASE_URL"] = ""
 sys.path.insert(0, ".")
 from studio import brain, roman
 fails = []

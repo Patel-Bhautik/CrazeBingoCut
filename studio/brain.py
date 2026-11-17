@@ -24,6 +24,7 @@ SCHEMA = {
             "title": {"type": "STRING"},
             "description": {"type": "STRING"},
             "hashtags": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "tags": {"type": "ARRAY", "items": {"type": "STRING"}},
             "highlight_words": {"type": "ARRAY", "items": {"type": "STRING"}},
             "reason": {"type": "STRING"},
         },
@@ -58,9 +59,11 @@ Rules:
 - Skip weak moments. Fewer strong clips beat many weak ones. Return [] if nothing is worth clipping.
 - score: 0-100, how likely a stranger keeps watching. Be honest; most clips are 50-80.
 - hook: at most 5 words, ALL CAPS, shown as big text on the video. Curiosity, but true to what happens.
-- title: at most 70 characters, for the post.
-- description: one or two sentences.
-- hashtags: 5 tags without the # sign.
+- title: at most 70 characters, for the post. Put first the words people would search for (the person, the game,
+  what happens). It must be true to the clip.
+- description: two or three sentences a stranger understands, using those same search words naturally.
+- hashtags: 5 to 8 tags without the # sign, from specific (names, the game) to broad (the topic).
+- tags: 8 to 12 search phrases of one to four words, without the # sign, that people would type to find this clip.
 - highlight_words: 3 to 6 single words spoken in the clip that carry the punch.
 - Write hook, title, description, hashtags and highlight_words in English. If the video is in Hindi or Urdu,
   you may write them the way people type Hindi and Urdu in Roman letters (Hinglish: "yaar ye kya hai"), never
@@ -113,12 +116,15 @@ def _tidy(c, s, e):
     tags = c.get("hashtags") if isinstance(c.get("hashtags"), list) else []
     tags = [re.sub(r"\W", "", str(h))[:30] for h in tags if isinstance(h, (str, int))]
     words = c.get("highlight_words") if isinstance(c.get("highlight_words"), list) else []
+    search = c.get("tags") if isinstance(c.get("tags"), list) else []
+    search = [re.sub(r"[#,<>]", "", _text(t, 30)).strip() for t in search if isinstance(t, (str, int))]
     return {
         "start": s, "end": e, "score": max(0, min(100, int(_num(c.get("score"))))),
         "category": cat if cat in CATEGORIES else "other",
         "hook": roman.to_roman(_text(c.get("hook"), 60)).upper(), "title": roman.to_roman(_text(c.get("title"), 100)),
-        "description": roman.to_roman(_text(c.get("description"), 300)),
+        "description": roman.to_roman(_text(c.get("description"), 500)),
         "hashtags": [t for t in tags if t][:8],
+        "tags": [roman.to_roman(t) for t in search if t][:12],
         "highlight_words": [roman.to_roman(_text(h, 30)) for h in words][:8],
         "reason": _text(c.get("reason"), 200),
     }
